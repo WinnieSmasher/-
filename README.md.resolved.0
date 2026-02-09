@@ -1,0 +1,90 @@
+# Spring Cloud Alibaba 电商微服务架构演练
+
+![Spring Cloud Alibaba](https://img.shields.io/badge/Spring%20Cloud%20Alibaba-2022.0.0.0-blue.svg) ![Nacos](https://img.shields.io/badge/Nacos-2.x-brightgreen.svg) ![Sentinel](https://img.shields.io/badge/Sentinel-1.8.6-orange.svg) ![RocketMQ](https://img.shields.io/badge/RocketMQ-5.0-red.svg) ![Seata](https://img.shields.io/badge/Seata-1.6.1-yellow.svg)
+
+## 项目简介 (Introduction)
+
+本项目基于 **Spring Cloud Alibaba** 微服务架构，旨在复现并优化电商核心交易链路。作为一个致力于深入理解微服务高可用架构的实践演练项目，该仓库不仅涵盖了传统的电商功能模块（商品、订单、支付等），更重点通过 **服务治理**、**流量防护**、**分布式事务** 以及 **消息驱动架构** 解决了高并发场景下的实际生产问题。
+
+本项目重点演练了以下核心技术难题：
+1.  **高并发限流熔断**
+2.  **分布式事务一致性保障**
+3.  **消息驱动的业务解耦与最终一致性**
+4.  **多环境下的服务治理与配置管理**
+
+---
+
+## 核心架构与技术亮点 (Architecture & Highlights)
+
+### 1. 服务治理与配置管理 (Service Governance)
+*   **注册与配置中心**: 采用 **Nacos 2.x** 集群作为服务注册与配置中心。
+*   **多环境隔离**: 利用 Nacos 的 **Namespace** 机制实现了 Dev/Test/Prod 多环境的严格隔离，有效避免了不同环境服务间的串扰。
+*   **问题解决**: 解决了在本地开发与测试环境中常见的 **GRPC 端口冲突** 导致的服务注册失败问题，并编写了自动化脚本实现了配置文件的批量同步与动态刷新。
+
+### 2. 高可用与流量防护 (High Availability & Traffic Guard)
+*   **秒杀场景限流**: 针对电商系统中最核心的“秒杀”接口，集成了 **Sentinel** 进行全方位的流量控制。
+*   **热点参数限流**: 实现了基于 **UserID** 维度的热点参数限流，有效防止了恶意用户或爬虫的高频刷单行为。
+*   **熔断降级**: 配置了严格的熔断规则，当接口响应时间（RT）持续升高或异常比例达到阈值时，自动触发服务降级，保护下游服务不被拖垮，显著降低了高峰流量下的系统雪崩风险。
+
+### 3. 消息驱动与业务解耦 (Message Driven & Decoupling)
+*   **异步削峰**: 部署了 **RocketMQ 5.0** 集群，将“订单创建”、“库存扣减”等高并发写操作拆分为异步消息处理，大幅提升了系统的吞吐量。
+*   **延迟消息**: 利用 RocketMQ 的 **延迟消息 (Delay Level)** 机制实现了“订单 30 分钟未支付自动关闭”的功能。该方案替代了传统的 Quartz/Spring Task 定时轮询数据库方案，极大地减轻了数据库的读取与锁定压力。
+
+### 4. 分布式事务实践 (Distributed Transaction)
+*   **Seata AT 模式**: 集成了 **Seata** 分布式事务框架，采用 AT (Auto Transaction) 模式处理跨服务（订单服务、库存服务、账户服务）的数据一致性。
+*   **全局锁与回滚**: 深入分析了 Seata 的 **undo log** 生成与 **全局锁 (Global Lock)** 竞争机制。通过手动模拟部分服务宕机和数据库异常场景，验证了核心交易链路在异常情况下的事务回滚能力，确保了数据的最终一致性。
+
+---
+
+## 技术栈 (Tech Stack)
+
+| 技术组件 | 说明 | 官网/版本 |
+| :--- | :--- | :--- |
+| **Spring Cloud Alibaba** | 微服务解决方案 | 2022.0.0.0 |
+| **Spring Boot** | 容器化应用框架 | 3.0.2 |
+| **Nacos** | 服务注册与配置中心 | 2.2.0 |
+| **Sentinel** | 流量控制与熔断降级 | 1.8.6 |
+| **RocketMQ** | 分布式消息队列 | 5.0.0 |
+| **Seata** | 分布式事务框架 | 1.6.1 |
+| **Mysql** | 关系型数据库 | 8.0 |
+| **Redis** | 缓存与分布式锁 | 7.0 |
+| **Elasticsearch** | 搜索与日志分析 | 7.17.3 |
+| **Docker & Kubernetes** | 容器化部署 | Latest |
+
+---
+
+## 快速开始 (Quick Start)
+
+### 环境准备
+请确保本地已安装以下环境：
+*   JDK 17+
+*   Maven 3.8+
+*   Docker & Docker Compose
+*   MySQL 8.0
+*   Redis 7.0
+
+### 部署步骤
+1.  **克隆仓库**:
+    ```bash
+    git clone https://github.com/your-username/mall-swarm-practice.git
+    cd mall-swarm-practice
+    ```
+2.  **启动基础服务 (Docker)**:
+    进入 `document/docker` 目录，执行 `docker-compose up -d` 启动 Nacos, RocketMQ, Seata, Redis, MySQL 等基础中间件。
+3.  **导入数据库**:
+    创建 `mall` 数据库并导入 `document/sql/mall.sql` 脚本。
+4.  **修改配置**:
+    在 Nacos 控制台导入 `document/nacos/config.zip` 配置文件，并修改其中的数据库连接信息。
+5.  **启动微服务**:
+    依次启动 `mall-admin`, `mall-portal`, `mall-search` 等微服务模块。
+
+---
+
+## 运行截图 (Screenshots)
+
+> *此处留坑，建议补充 Nacos 服务列表截图、Sentinel 限流监控截图、RocketMQ 控制台截图*
+
+---
+
+## 致谢 (Credits)
+本项目基于 [macrozheng/mall-swarm](https://github.com/macrozheng/mall-swarm) 二次开发与研读，感谢原作者的开源贡献。
